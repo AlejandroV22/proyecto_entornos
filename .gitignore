@@ -1,0 +1,31 @@
+# Entorno virtual
+venv/
+.venv/
+
+# Archivos de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Base de datos local (opcional, si no quieres versionarla)
+db.sqlite3
+
+# Archivos de logs y temporales
+*.log
+*.pot
+*.py[cod]
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+*.log
+
+#Del Frontend
+node_modules/  
+dist/
+build/
+.vite
+
+# Var de Entorno
+.env
