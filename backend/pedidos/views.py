@@ -5,7 +5,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import authenticate, login
 from django.conf import settings
 import json
-from .models import Pedido, Producto
+from .models import Pedido, Producto, DetallePedido
+from decimal import Decimal
 
 
 @csrf_exempt  
@@ -148,3 +149,93 @@ def edit_product(request, product_id):
         })
 
     return JsonResponse({"error": "Invalid request"}, status=400)
+
+@csrf_exempt
+def create_order(request):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+
+            username = data.get("usuario")
+            usuario = User.objects.get(username=username)
+
+            pedido = Pedido.objects.create(usuario=usuario, estado="pendiente", total=0)
+
+            total = Decimal("0.00")
+
+            for item in data.get("items", []):
+                producto = Producto.objects.get(pk=item["producto_id"])
+                cantidad = int(item["cantidad"])
+                subtotal = producto.precio * cantidad
+
+                DetallePedido.objects.create(
+                    pedido=pedido,
+                    producto=producto,
+                    cantidad=cantidad,
+                    subtotal=subtotal
+                )
+
+                # Restar stock
+                producto.stock -= cantidad
+                producto.save()
+
+                total += subtotal
+
+            # Guardar total en el pedido
+            pedido.total = total
+            pedido.save()
+
+            return JsonResponse({
+                "id": pedido.id,
+                "usuario": pedido.usuario.username,
+                "estado": pedido.estado,
+                "total": str(pedido.total),
+                "fecha_pedido": pedido.fecha_pedido.strftime("%Y-%m-%d %H:%M:%S"),
+                "detalles": [
+                    {
+                        "producto": detalle.producto.nombre,
+                        "cantidad": detalle.cantidad,
+                        "subtotal": str(detalle.subtotal)
+                    }
+                    for detalle in pedido.detalles.all()
+                ]
+            })
+
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=400)
+
+    return JsonResponse({"error": "Invalid request"}, status=400)
+
+@csrf_exempt
+def get_user_orders(request, username):
+    if request.method != "GET":
+        return JsonResponse({"error": "Invalid request"}, status=400)
+
+    try:
+        user = User.objects.get(username=username)
+    except User.DoesNotExist:
+        return JsonResponse({"error": "Usuario no encontrado"}, status=404)
+
+    pedidos = Pedido.objects.filter(usuario=user).order_by("-fecha_pedido")
+
+    result = []
+    for pedido in pedidos:
+        items = []
+
+        for detalle in pedido.detalles.all():
+            items.append({
+                "productName": detalle.producto.nombre,
+                "quantity": detalle.cantidad,
+                "price": float(detalle.producto.precio),   # precio unitario
+                "subtotal": float(detalle.subtotal)
+            })
+
+        result.append({
+            "id": pedido.id,
+            "date": pedido.fecha_pedido.strftime("%Y-%m-%d %H:%M:%S"),
+            "total": float(pedido.total) if pedido.total is not None else 0.0,
+            "status": pedido.estado,
+            "items": items
+        })
+
+    return JsonResponse(result, safe=False)

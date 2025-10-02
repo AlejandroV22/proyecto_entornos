@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 import { Eye, EyeOff } from "lucide-react";
 
 interface SimpleLoginFormProps {
@@ -66,12 +66,6 @@ export function SimpleLoginForm({ onLogin, onSwitchToRegister }: SimpleLoginForm
     }));
   };
 
-  const quickLogin = (username: string, userType: 'user' | 'admin') => {
-    setFormData({ username, password: 'demo123' });
-    onLogin(username, userType);
-    toast.success(`Logged in as ${username}`);
-  };
-
   return (
     <div className="space-y-4">
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -124,38 +118,6 @@ export function SimpleLoginForm({ onLogin, onSwitchToRegister }: SimpleLoginForm
         </Button>
       </form>
 
-      {/* Demo quick login buttons */}
-      <div className="space-y-2">
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t" />
-          </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-background px-2 text-muted-foreground">
-              Quick Demo Login
-            </span>
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-2 gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => quickLogin('customer', 'user')}
-            disabled={isLoading}
-          >
-            Demo User
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => quickLogin('admin', 'admin')}
-            disabled={isLoading}
-          >
-            Demo Admin
-          </Button>
-        </div>
-      </div>
 
       <div className="text-center">
         <p className="text-sm text-muted-foreground">

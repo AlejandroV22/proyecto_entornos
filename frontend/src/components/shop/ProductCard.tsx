@@ -1,7 +1,7 @@
 import { Button } from "../ui/button";
 import { Card, CardContent, CardFooter } from "../ui/card";
 import { Badge } from "../ui/badge";
-import { ImageWithFallback } from "../figma/ImageWithFallback";
+import { ImageWithFallback } from "../imagefallback/ImageWithFallback";
 import { Plus, ShoppingCart } from "lucide-react";
 
 export interface Product {

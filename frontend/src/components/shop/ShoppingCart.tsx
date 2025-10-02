@@ -2,7 +2,7 @@ import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Separator } from "../ui/separator";
-import { ImageWithFallback } from "../figma/ImageWithFallback";
+import { ImageWithFallback } from "../imagefallback/ImageWithFallback";
 import { Minus, Plus, Trash2, ShoppingBag } from "lucide-react";
 import { Product } from "./ProductCard";
 
@@ -65,7 +65,6 @@ export function ShoppingCart({
                     </div>
                     <div className="flex-1">
                       <h4 className="line-clamp-1">{item.name}</h4>
-                      <p className="text-sm text-muted-foreground">{item.platform}</p>
                       <div className="flex items-center justify-between mt-2">
                         <p className="font-semibold">${item.price}</p>
                         <div className="flex items-center gap-2">

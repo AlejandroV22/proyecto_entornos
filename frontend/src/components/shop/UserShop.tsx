@@ -1,3 +1,4 @@
+import React from "react";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
@@ -47,8 +48,8 @@ export function UserShop({ products, cart, onAddToCart, userOrders, isAuthentica
 
   // Filter products
   const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const term = searchTerm.toLowerCase();
+    const matchesSearch = product.name.toLowerCase().includes(term)
     const matchesCategory = selectedCategory === "all" || product.category === selectedCategory;
     const matchesCondition = selectedCondition === "all" || product.condition === selectedCondition;
     
@@ -217,6 +218,7 @@ export function UserShop({ products, cart, onAddToCart, userOrders, isAuthentica
                   </Card>
                 ))}
               </div>
+              
             </TabsContent>
 
             <TabsContent value="analytics" className="space-y-4">

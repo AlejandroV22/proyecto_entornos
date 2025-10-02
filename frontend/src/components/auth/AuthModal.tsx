@@ -50,7 +50,7 @@ export function AuthModal({
             <div className="bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-6 rounded-lg">
               <div className="text-center mb-6">
                 <h1 className="text-3xl font-bold text-white mb-2">
-                  🕹️ Retro Games
+                  🕹️ Retro Collector
                 </h1>
                 <p className="text-purple-200">
                   Sign in to add items to your cart
@@ -75,7 +75,7 @@ export function AuthModal({
             <div className="bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-6 rounded-lg">
               <div className="text-center mb-6">
                 <h1 className="text-3xl font-bold text-white mb-2">
-                  🕹️ Retro Games
+                  🕹️ Retro Collector
                 </h1>
                 <p className="text-purple-200">
                   Join the retro gaming community

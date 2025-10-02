@@ -612,36 +612,7 @@ const mockSales = [
   }
 ];
 
-const mockUserOrders = [
-  {
-    id: 'order1',
-    date: '2024-09-01',
-    total: 135.98,
-    status: 'Delivered',
-    items: [
-      { productName: 'Super Mario Bros. 3', quantity: 1, price: 45.99 },
-      { productName: 'Atari 2600 Console', quantity: 1, price: 89.99 }
-    ]
-  },
-  {
-    id: 'order2',
-    date: '2024-08-15',
-    total: 69.99,
-    status: 'Delivered',
-    items: [
-      { productName: 'Nintendo Game Boy', quantity: 1, price: 69.99 }
-    ]
-  },
-  {
-    id: 'order3',
-    date: '2024-07-20',
-    total: 89.99,
-    status: 'Delivered',
-    items: [
-      { productName: 'The Legend of Zelda', quantity: 1, price: 89.99 }
-    ]
-  }
-];
+
 
 export default function App() {
   const [currentView, setCurrentView] = useState<'user' | 'admin'>('user');
@@ -650,9 +621,10 @@ export default function App() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isProductFormOpen, setIsProductFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [userOrders, setUserOrders] = useState<any[]>([]);
+
   
-  useEffect(() => {
-    const fetchProducts = async () => {
+const fetchProducts = async () => {
       try {
         const response = await fetch("http://localhost:8000/api/products/");
         if (!response.ok) throw new Error("Failed to fetch products");
@@ -675,6 +647,7 @@ export default function App() {
       }
     };
 
+  useEffect(() => {
     fetchProducts();
   }, []);
 
@@ -763,10 +736,46 @@ export default function App() {
     toast.success('Removed from cart');
   };
 
-  const handleCheckout = () => {
-    toast.success('Order placed successfully!');
-    setCart([]);
-    setIsCartOpen(false);
+  const handleCheckout = async () => {
+    if (!user) {
+      toast.error("⚠️ You must be logged in to place an order.");
+      return;
+    }
+    
+    try {
+    const response = await fetch("http://localhost:8000/api/orders/create/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        usuario: user.username,
+        items: cart.map(item => ({
+          producto_id: item.id,
+          cantidad: item.quantity,
+        })),
+      }),
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      console.log("Pedido creado:", data);
+      toast.success('Order placed successfully!');
+      setCart([]);
+      setIsCartOpen(false);
+      await fetchProducts();
+      if (user?.username) {
+        await fetchUserOrders(user.username);
+      }
+      
+    } else {
+      toast.error("❌ Error: " + data.error);
+    }
+  } catch (err) {
+    console.error(err);
+    toast.error("⚠️ Error connecting to server");
+  }
   };
 
   const handleAddProduct = () => {
@@ -844,6 +853,35 @@ export default function App() {
     
   };
 
+  const fetchUserOrders = async (username?: string) => {
+    if (!username) {
+      setUserOrders([]);
+      return;
+    }
+    try {
+      const res = await fetch(`http://localhost:8000/api/orders/user/${encodeURIComponent(username)}/`);
+      if (!res.ok) {
+        console.error("Failed to fetch user orders", await res.text());
+        setUserOrders([]);
+        return;
+      }
+      const data = await res.json();
+      setUserOrders(data);
+    } catch (err) {
+      console.error("Error fetching user orders:", err);
+      setUserOrders([]);
+    }
+  };
+
+  useEffect(() => {
+    if (user?.username) {
+      fetchUserOrders(user.username);
+    } else {
+      setUserOrders([]);
+    }
+  }, [user]);
+
+
   return (
     <div className="min-h-screen bg-background">
       <Navigation
@@ -869,7 +907,7 @@ export default function App() {
             products={products}
             cart={cart}
             onAddToCart={handleAddToCart}
-            userOrders={user ? mockUserOrders : undefined}
+            userOrders={user ? userOrders : undefined}
             isAuthenticated={!!user}
           />
         ) : (

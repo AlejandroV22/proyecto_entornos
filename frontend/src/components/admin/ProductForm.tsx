@@ -9,7 +9,7 @@ import { Product } from "../shop/ProductCard";
 import React from 'react';
 
 interface ProductFormProps {
-  product?: Product;
+  product?: Product | null;
   isOpen: boolean;
   onClose: () => void;
   onSave: (productData: any) => void;
@@ -117,7 +117,7 @@ export function ProductForm({ product, isOpen, onClose, onSave }: ProductFormPro
 
           <div>
             <Label htmlFor="condition">Condition</Label>
-            <Select value={formData.condition} onValueChange={(value) => handleChange('condition', value)}>
+            <Select value={formData.condition} onValueChange={(value: string) => handleChange('condition', value)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
