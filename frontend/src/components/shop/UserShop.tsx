@@ -1,5 +1,4 @@
-import React from "react";
-import { useState } from "react";
+import React, { useState } from "react"; // 🛑 IMPORTAR useState AQUI
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -7,8 +6,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Badge } from "../ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { Search, Filter, Grid, List } from "lucide-react";
-import { ProductCard, Product } from "./ProductCard";
+import { ProductCard, Product } from "./ProductCard"; 
 import { CartItem } from "./ShoppingCart";
+import { useNavigate } from "react-router-dom";
+
+// 🌟 Importar los nuevos componentes Modales 🌟
+import { BidModal } from "../modals/BidModal"; 
+import { CreateAuctionModal } from "../modals/CreateAuctionModal";
+
 import { 
   BarChart, 
   Bar, 
@@ -25,6 +30,9 @@ interface UserShopProps {
   products: Product[];
   cart: CartItem[];
   onAddToCart: (product: Product) => void;
+  userId?: string | null;
+  onBid?: (product: Product) => void;
+  onCreateAuction?: (product: Product) => void;
   userOrders?: Array<{
     id: string;
     date: string;
@@ -32,19 +40,83 @@ interface UserShopProps {
     status: string;
     items: Array<{ productName: string; quantity: number; price: number }>;
   }>;
+
   isAuthenticated?: boolean;
 }
 
-export function UserShop({ products, cart, onAddToCart, userOrders, isAuthenticated }: UserShopProps) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [selectedPlatform, setSelectedPlatform] = useState("all");
-  const [selectedCondition, setSelectedCondition] = useState("all");
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
+
+export function UserShop({ products, cart, onAddToCart, userOrders, isAuthenticated, /*onBid, onCreateAuction,*/ userId }: UserShopProps) {
+  const navigate = useNavigate();
+  //  ESTADOS DE TIENDA Y FILTROS
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedCondition, setSelectedCondition] = useState("all");
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  
+  // ESTADOS AÑADIDOS PARA EL CONTROL DE MODALES (CORRECCIÓN 1, 2, 3) 
+  const [isBidModalOpen, setIsBidModalOpen] = useState(false);
+  const [isCreateAuctionModalOpen, setIsCreateAuctionModalOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  
+  
   // Get unique values for filters
   const categories = [...new Set(products.map(p => p.category))];
   const conditions = [...new Set(products.map(p => p.condition))];
+
+  // Maneja la acción de Ofertar (onBid)
+  const handleOpenBidModal = (product: Product) => {
+      // Si el producto es una subasta activa, abrimos el modal
+      if (product.metodo_venta === 'SUBASTA' && product.auction && product.auction.is_active) {
+          setSelectedProduct(product); 
+          setIsBidModalOpen(true); 
+      } else {
+          // Opción: Redirigir si queremos que la oferta se haga en otra página. 
+          // Por ahora, si es subasta, navegamos al detalle si no usamos modal.
+          if (product.metodo_venta === 'SUBASTA' && product.auction) {
+              navigate(`/auction/${product.auction.id}`);
+          } else {
+              // Opcionalmente: usar un modal de error aquí
+              console.error("Este producto no está en subasta activa.");
+          }
+      }
+    };
+
+  const handleOpenCreateAuctionModal = (product: Product) => {
+      // Aseguramos que el dueño del producto sea el usuario actual
+      if (product.ownerId && userId && product.ownerId === parseInt(userId, 10)) {
+          setSelectedProduct(product); 
+          setIsCreateAuctionModalOpen(true); 
+      } else {
+          alert("Solo el dueño puede crear una subasta para este producto.");
+      }
+  };
+  const handlePlaceBidApiCall = async (amount: number) => { // Eliminé productId ya que lo tenemos en selectedProduct
+    if (!selectedProduct) return;
+    try {
+        console.log(`Oferta de $${amount} enviada para el producto ${selectedProduct.id}.`);
+        // Aquí iría la llamada: const result = await makeBid(selectedProduct.id, amount); 
+        alert("Oferta realizada con éxito!");
+        setIsBidModalOpen(false); 
+    } catch (error) {
+        console.error("Error al ofertar:", error);
+        alert(`Fallo al ofertar: ${error}`);
+    }
+};
+
+const handleCreateAuctionApiCall = async (initialPrice: number, durationDays: number) => { // Simplificado
+    if (!selectedProduct) return;
+    try {
+        console.log(`Creando subasta para ${selectedProduct.id} con precio $${initialPrice}`);
+        // Aquí iría la llamada: const result = await createAuction(selectedProduct.id, initialPrice, durationDays); 
+        alert("Subasta creada con éxito!");
+        setIsCreateAuctionModalOpen(false); 
+    } catch (error) {
+        console.error("Error al crear subasta:", error);
+        alert(`Fallo al crear subasta: ${error}`);
+    }
+};
+
 
   // Filter products
   const filteredProducts = products.filter(product => {
@@ -72,6 +144,10 @@ export function UserShop({ products, cart, onAddToCart, userOrders, isAuthentica
     amount
   }));
 
+ 
+
+
+
   const categorySpending = userOrders?.flatMap(order => order.items).reduce((acc, item) => {
     // This is simplified - in a real app you'd match items to products to get categories
     const category = "Games"; // Placeholder
@@ -90,6 +166,8 @@ export function UserShop({ products, cart, onAddToCart, userOrders, isAuthentica
 
   const totalSpent = userOrders?.reduce((sum, order) => sum + order.total, 0) || 0;
   const totalOrders = userOrders?.length || 0;
+  // UserShop.tsx (Dentro del componente UserShop, antes del return)
+
 
   return (
     <div className="space-y-6">
@@ -166,18 +244,20 @@ export function UserShop({ products, cart, onAddToCart, userOrders, isAuthentica
           </div>
 
           {/* Products Grid/List */}
-          <div className={viewMode === 'grid' 
-            ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
-            : "space-y-4"
-          }>
-            {filteredProducts.map((product) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                onAddToCart={onAddToCart}
-              />
-            ))}
-          </div>
+          <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" : "space-y-4"}>
+              {filteredProducts.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  isAuthenticated={!!isAuthenticated}
+                  onAddToCart={onAddToCart} 
+                  onBid={handleOpenBidModal} 
+                  onCreateAuction={handleOpenCreateAuctionModal}
+                  // -------------------------------------------
+                  userId={userId ? parseInt(userId, 10) : undefined}
+                />
+              ))}
+            </div>
 
           {filteredProducts.length === 0 && (
             <div className="text-center py-8">
@@ -301,6 +381,32 @@ export function UserShop({ products, cart, onAddToCart, userOrders, isAuthentica
           </>
         )}
       </Tabs>
+        {/* 🌟 RENDERIZADO DEL MODAL DE OFERTA 🌟 */}
+        {isBidModalOpen && selectedProduct && (
+            <BidModal 
+                isOpen={isBidModalOpen}
+                onClose={() => setIsBidModalOpen(false)} // Función para cerrar
+                product={selectedProduct}
+                // Función real que llama a la API de Django (Definiremos esta lógica a continuación)
+                onPlaceBid={(amount: number) => handlePlaceBidApiCall(amount)}
+            />
+        )}
+
+        {/* 🌟 RENDERIZADO DEL MODAL DE CREACIÓN DE SUBASTA 🌟 */}
+        {isCreateAuctionModalOpen && selectedProduct && (
+            <CreateAuctionModal
+                isOpen={isCreateAuctionModalOpen}
+                onClose={() => setIsCreateAuctionModalOpen(false)}
+                product={selectedProduct}
+                // Función real que llama a la API de Django
+                onCreateAuction={handleCreateAuctionApiCall}
+            />
+        )}
+
+
     </div>
+
+    
   );
+
 }

@@ -11,6 +11,9 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 from django.db.models import Max
 
+
+
+
 @csrf_exempt  
 def register_user(request):
     if request.method == "POST":
@@ -486,3 +489,43 @@ def get_product_detail(request, product_id):
             pass
             
     return JsonResponse(product_data, status=200)
+
+def get_user_products(request, username):
+    try:
+        user = User.objects.get(username=username)
+    except User.DoesNotExist:
+        return JsonResponse({"error": "Usuario no encontrado"}, status=404)
+
+    productos = Producto.objects.filter(owner=user)
+
+    data = []
+    for p in productos:
+        subasta_data = None
+        if hasattr(p, "subasta"):
+            subasta = p.subasta
+            subasta_data = {
+                "auction_id": subasta.id,
+                "precio_minimo": str(subasta.precio_minimo),
+                "end_time": subasta.end_time.strftime("%Y-%m-%d %H:%M:%S"),
+                "is_active": subasta.is_active,
+                "is_finished": subasta.is_finished,
+                "oferta_actual": str(subasta.highest_bid.amount) if subasta.highest_bid else None,
+                "ofertador_principal": subasta.highest_bid.bidder.username if subasta.highest_bid else None,
+                "ganador": subasta.ganador.username if subasta.ganador else None,
+            }
+
+        data.append({
+            "id": p.id,
+            "nombre": p.nombre,
+            "descripcion": p.descripcion,
+            "tipo": p.tipo,
+            "precio": str(p.precio),
+            "stock": p.stock,
+            "condicion": p.condicion,
+            "imagen": request.build_absolute_uri(p.imagen.url) if p.imagen else None,
+            "owner_username": p.owner.username,
+            "metodo_venta": p.metodo_venta,
+            "subasta_info": subasta_data,
+        })
+
+    return JsonResponse(data, safe=False)

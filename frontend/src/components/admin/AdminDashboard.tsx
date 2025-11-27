@@ -463,6 +463,7 @@ export function AdminDashboard({ products, sales, onAddProduct, onEditProduct }:
                           <PaginationPrevious 
                             onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
                             className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                            size="default"
                           />
                         </PaginationItem>
                         
@@ -479,6 +480,7 @@ export function AdminDashboard({ products, sales, onAddProduct, onEditProduct }:
                                   onClick={() => handlePageChange(page)}
                                   isActive={currentPage === page}
                                   className="cursor-pointer"
+                                  size="default"
                                 >
                                   {page}
                                 </PaginationLink>
@@ -496,11 +498,11 @@ export function AdminDashboard({ products, sales, onAddProduct, onEditProduct }:
                           }
                           return null;
                         })}
-                        
                         <PaginationItem>
                           <PaginationNext 
                             onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
                             className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                            size="default"
                           />
                         </PaginationItem>
                       </PaginationContent>

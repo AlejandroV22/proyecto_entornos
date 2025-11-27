@@ -11,8 +11,9 @@ import {
 } from "lucide-react";
 
 interface NavigationProps {
-  currentView: "user" | "admin";
-  onViewChange: (view: "user" | "admin") => void;
+  // ahora incluimos myProducts en el union type
+  currentView: "user" | "admin" | "myProducts";
+  onViewChange: (view: "user" | "admin" | "myProducts") => void;
   cartItemCount: number;
   onCartClick: () => void;
   user?: {
@@ -22,6 +23,7 @@ interface NavigationProps {
   onLogout: () => void;
   onLoginClick?: () => void;
 }
+
 
 export function Navigation({
   currentView,
@@ -102,6 +104,18 @@ export function Navigation({
                       {cartItemCount}
                     </Badge>
                   )}
+                </Button>
+              )}
+              {/* Botón para ver productos del usuario */}
+              {currentView === "user" && user && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onViewChange("myProducts")}
+                  className="gap-2"
+                >
+                  <Package className="size-4" />
+                  Mis Productos
                 </Button>
               )}
 

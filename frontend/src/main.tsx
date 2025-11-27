@@ -1,7 +1,16 @@
+import { createRoot } from "react-dom/client";
+import App from "./App.tsx";
+import "./index.css";
+import { BrowserRouter } from 'react-router-dom'; 
+import React from "react"; // Siempre se recomienda importar React al usar JSX
 
-  import { createRoot } from "react-dom/client";
-  import App from "./App.tsx";
-  import "./index.css";
+const container = document.getElementById("root");
+const root = createRoot(container!);
 
-  createRoot(document.getElementById("root")!).render(<App />);
-  
+root.render(
+  <React.StrictMode>
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
+  </React.StrictMode>
+);
