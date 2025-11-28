@@ -89,15 +89,27 @@ export function UserShop({
   const [isCreateAuctionModalOpen, setIsCreateAuctionModalOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
-  // Unique filter values
-  const categories = [...new Set(products.map((p) => p.category))];
+  // Unique filter values - normalize categories
+  const categories = [...new Set(products.map((p) => p.category.charAt(0).toUpperCase() + p.category.slice(1).toLowerCase()))];
   const conditions = [...new Set(products.map((p) => p.condition))];
 
   // Filtrado de productos
   const filteredProducts = products.filter((product) => {
     const term = searchTerm.toLowerCase();
     const matchesSearch = product.name.toLowerCase().includes(term);
-    const matchesCategory = selectedCategory === "all" || product.category === selectedCategory;
+
+    // Normalize product category for comparison
+    const productCategory = product.category.charAt(0).toUpperCase() + product.category.slice(1).toLowerCase();
+
+    let matchesCategory = false;
+    if (selectedCategory === "all") {
+      matchesCategory = true;
+    } else if (selectedCategory === "En Subasta") {
+      matchesCategory = !!product.auction && product.auction.is_active;
+    } else {
+      matchesCategory = productCategory === selectedCategory;
+    }
+
     const matchesCondition = selectedCondition === "all" || product.condition === selectedCondition;
     return matchesSearch && matchesCategory && matchesCondition;
   });
@@ -212,6 +224,7 @@ export function UserShop({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
+                  <SelectItem value="En Subasta">En Subasta</SelectItem>
                   {categories.map((category) => (
                     <SelectItem key={category} value={category}>
                       {category}
@@ -406,7 +419,7 @@ export function UserShop({
             setSelectedProduct(null);
           }}
           onCreateAuction={(initialPrice: number, durationHours: number) => handleCreateAuctionFromModal(initialPrice, durationHours)}
-          // onCreated: after successful creation we refresh (the handler returns a promise)
+        // onCreated: after successful creation we refresh (the handler returns a promise)
         />
       )}
     </div>

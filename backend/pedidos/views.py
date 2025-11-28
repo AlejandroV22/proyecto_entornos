@@ -64,6 +64,7 @@ def login_user(request):
 
         if user is not None:
             login(request, user)
+            request.session.save()  # Forzar guardado de sesión
             # Todos los usuarios son del tipo "user" (ya no hay admins)
             return JsonResponse({
                 "message": "Login successful", 
@@ -104,6 +105,7 @@ def get_products(request):
                         "precio_minimo": str(auction.precio_minimo),
                         "oferta_actual": str(auction.highest_bid.amount) if auction.highest_bid else str(auction.precio_minimo),
                         "is_active": auction.is_active,
+                        "highest_bidder": auction.highest_bid.bidder.username if auction.highest_bid else None,
                     }
                 except Auction.DoesNotExist:
                     pass
@@ -231,10 +233,11 @@ def create_auction(request, product_id):
 
         data = json.loads(request.body)
         precio_minimo = Decimal(data.get("precio_minimo", 0))
-        duracion_horas = data.get("duracion_horas", 24)
-        #duracion_horas = int(request.POST.get("duracion_horas", 24))
+        duracion_horas = int(data.get("duracion_horas", 24))
+        duracion_minutos = int(data.get("duracion_minutos", 0))
+        
         local_tz = pytz.timezone("America/Bogota")
-        end_time = timezone.now() + timedelta(hours=int(duracion_horas))
+        end_time = timezone.now() + timedelta(hours=duracion_horas, minutes=duracion_minutos)
         
         auction = Auction.objects.create(
             producto=producto,
@@ -269,7 +272,7 @@ def make_bid(request, auction_id):
 
         if auction.is_finished:
             return JsonResponse({"error": "La subasta ha finalizado."}, status=400)
-
+        
         if request.user == auction.producto.owner:
             return JsonResponse({"error": "No puedes ofertar en tu propia subasta."}, status=403)
 

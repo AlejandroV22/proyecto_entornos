@@ -88,6 +88,7 @@ export default function App() {
               current_price: parseFloat(p.subasta_info.oferta_actual || "0"),
               end_time: p.subasta_info.end_time,
               is_active: p.subasta_info.is_active,
+              highest_bidder: p.subasta_info.highest_bidder,
             }
             : null,
 
@@ -643,7 +644,7 @@ export default function App() {
           isOpen={isCreateAuctionModalOpen}
           product={selectedProduct}
           onClose={() => setIsCreateAuctionModalOpen(false)}
-          onCreateAuction={async (initialPrice: number, durationHours: number) => {
+          onCreateAuction={async (initialPrice: number, durationHours: number, durationMinutes: number) => {
             if (!selectedProduct) return;
 
             try {
@@ -654,6 +655,7 @@ export default function App() {
                 body: JSON.stringify({
                   oferta_inicial: initialPrice,
                   duracion_horas: durationHours,
+                  duracion_minutos: durationMinutes,
                 }),
                 credentials: "include",
               });

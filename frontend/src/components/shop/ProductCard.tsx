@@ -22,7 +22,7 @@ export interface Product {
   // 🌟 CAMPOS REQUERIDOS PARA LA LÓGICA DE SUBASTA 🌟
   ownerId: number; // El ID del vendedor
   metodo_venta: 'DIRECTA' | 'SUBASTA'; // Indica el método
-  
+
   auctionId?: number; // Opcional: El ID de la subasta asociada (si metodo_venta es 'SUBASTA')
   currentAuctionPrice?: number; // Opcional: Precio actual de la oferta
 }
@@ -39,9 +39,10 @@ interface ProductCardProps {
 export interface Auction {
   id: number;
   current_price: number;
-  precio_minimo?: number;     
+  precio_minimo?: number;
   end_time: string;
   is_active: boolean;
+  highest_bidder?: string;
 }
 
 
@@ -60,13 +61,13 @@ export function ProductCard({
   };
 
   const [timeLeft, setTimeLeft] = useState<string>("");
-  const isAuctionActive = 
-  product.metodo_venta === 'SUBASTA' && 
-  product.auction && 
-  new Date(product.auction.end_time) > new Date(); 
+  const isAuctionActive =
+    product.metodo_venta === 'SUBASTA' &&
+    product.auction &&
+    new Date(product.auction.end_time) > new Date();
 
-  const isBidDisabled = 
-    !isAuctionActive || 
+  const isBidDisabled =
+    !isAuctionActive ||
     !isAuthenticated
   // --- COUNTDOWN ---
   useEffect(() => {
@@ -120,6 +121,11 @@ export function ProductCard({
             <p className="text-lg font-bold text-purple-600">
               Current Bid: ${product.auction.current_price}
             </p>
+            {product.auction.highest_bidder && (
+              <p className="text-sm font-medium text-blue-600">
+                Bidder: {product.auction.highest_bidder}
+              </p>
+            )}
             <p className="text-sm text-red-600 font-medium">Ends in: {timeLeft}</p>
           </>
         ) : (
@@ -139,7 +145,7 @@ export function ProductCard({
             onClick={() =>
               onBid(product)
             }
-            
+
           >
             <Gavel className="size-4" />
             Place Bid
