@@ -12,6 +12,8 @@ import { toast } from "sonner";
 import { MyProductsView } from "./components/MyProductsView";
 import { BidModal } from "./components/modals/BidModal";
 import { CreateAuctionModal } from "./components/modals/CreateAuctionModal";
+import { API_URL } from "./config";
+
 
 // --- mockSales (lo mantuve igual que en tu archivo) ---
 
@@ -35,7 +37,7 @@ export default function App() {
   const [myProducts, setMyProducts] = useState<AppProduct[]>([]);
   const [bidModalOpen, setBidModalOpen] = useState(false);
   const [auctionModalOpen, setAuctionModalOpen] = useState(false);
- 
+
 
 
   // Estados para controlar los modales
@@ -51,77 +53,65 @@ export default function App() {
 
   //const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
 
-  
+
   // --------- fetchProducts ----------
-const fetchProducts = async () => {
-  try {
-    const response = await fetch("http://localhost:8000/api/products/");
-    if (!response.ok) throw new Error("Failed to fetch products");
-    const data: any[] = await response.json();
+  const fetchProducts = async () => {
+    try {
+      const response = await fetch("http://localhost:8000/api/products/");
+      if (!response.ok) throw new Error("Failed to fetch products");
+      const data: any[] = await response.json();
 
-    const formattedProducts: Product[] = data.map((p: any) => {
-      
-      // Normalizar condición
-      const conditionMap: Record<string, "new" | "used" | "refurbished"> = {
-        "Nuevo": "new",
-        "Usado": "used",
-        "Restaurado": "refurbished"
-      };
+      const formattedProducts: Product[] = data.map((p: any) => {
 
-      return {
-        id: p.id.toString(),
-        name: p.nombre,
-        description: p.descripcion,
-        category: p.tipo,
-        price: parseFloat(p.precio),
-        stock: p.stock,
-        condition: conditionMap[p.condicion] ?? "used",
-        image: p.imagen || "",
-        ownerId: p.owner_id, 
-        metodo_venta: p.metodo_venta, 
-        
-        auction: p.subasta_info
-          ? {
-              id: p.subasta_info.auction_id,
+        // Normalizar condición
+        const conditionMap: Record<string, "new" | "used" | "refurbished"> = {
+          "Nuevo": "new",
+          "Usado": "used",
+          "Restaurado": "refurbished"
+        };
+
+        return {
+          id: p.id.toString(),
+          name: p.nombre,
+          description: p.descripcion,
+          category: p.tipo,
+          price: parseFloat(p.precio),
+          stock: p.stock,
+          condition: conditionMap[p.condicion] ?? "used",
+          image: p.imagen || "",
+          ownerId: p.owner_id,
+          metodo_venta: p.metodo_venta,
+
+          auction: p.subasta_info
+            ? {
+              id: Number(p.subasta_info.auction_id),
               current_price: parseFloat(p.subasta_info.oferta_actual || "0"),
               end_time: p.subasta_info.end_time,
               is_active: p.subasta_info.is_active,
             }
-          : null,
+            : null,
 
-        // útil para saber si el usuario es dueño
-        //owner: p.owner_username,
-      };
-    });
+          // útil para saber si el usuario es dueño
+          //owner: p.owner_username,
+        };
+      });
 
-    setProducts(formattedProducts);
-  } catch (error) {
-    console.error(error);
-  }
-};
+      setProducts(formattedProducts);
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
 
   useEffect(() => {
     fetchProducts();
   }, []);
 
-  const handleBid = (product: Product) => {
-    setSelectedProduct(product);
-    setIsBidModalOpen(true);
-  };
 
-  const handleCreateAuction = (product: Product) => {
-    setSelectedProduct(product);
-    setIsCreateAuctionModalOpen(true);
-  };
+
 
   // --------- Handler para eliminar producto en MyProductsView ----------
-  const handleDeleteMyProduct = (productId: number | string) => {
-    // Actualizamos el estado local (también conviene llamar al endpoint DELETE en el backend)
-    setMyProducts(prev => prev.filter(p => p.id !== productId.toString()));
-    // Opcional: si quieres eliminar del listado global products también:
-    setProducts(prev => prev.filter(p => p.id !== productId.toString()));
-  };
+
 
   // --------- Authentication state ----------
   const [user, setUser] = useState<{
@@ -133,7 +123,7 @@ const fetchProducts = async () => {
   const [authView, setAuthView] = useState<"login" | "register">("login");
 
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-  
+
   useEffect(() => {
     const stored = localStorage.getItem("user_info");
     if (stored) {
@@ -145,6 +135,12 @@ const fetchProducts = async () => {
     }
   }, []);
 
+
+
+
+
+
+
   // --------- Authentication handlers ----------
   const handleLogin = (username: string, userType: "user" | "admin", id?: number | string) => {
     const userObj = { username, userType, id };
@@ -154,12 +150,32 @@ const fetchProducts = async () => {
     setIsAuthModalOpen(false);
   };
 
+
+  // ---- Selección de producto para modales ----
+  const handleOpenBidModal = (product: AppProduct) => {
+    if (!product.auction) {
+      toast.error("Este producto no tiene una subasta activa.");
+      return;
+    }
+    setSelectedProduct(product); // Guardamos el producto seleccionado
+    setIsBidModalOpen(true);     // Abrimos el modal
+  };
+
+
+
+  const handleOpenCreateAuctionModal = (product: Product) => {
+    setSelectedProduct(product);
+    setIsCreateAuctionModalOpen(true);
+  };
+
+
+
   const handleOpenCreateProduct = () => {
     setEditingProduct(null); // Asegura que el formulario esté vacío (crear)
     setIsProductFormOpen(true);
   };
 
-   const handleRegister = (username: string, email: string, id?: number | string) => {
+  const handleRegister = (username: string, email: string, id?: number | string) => {
     const userObj = { username, email, userType: "user" as const };
     setUser(userObj);
     localStorage.setItem("user_info", JSON.stringify({ ...userObj, id }));
@@ -268,84 +284,180 @@ const fetchProducts = async () => {
   };
 
   // --------- Product form (admin) ----------
-  // App.tsx (Fragmento)
-
-// Asegúrate de que tu interfaz Product incluya 'ownerId', 'metodo_venta' y 'auction'
-// interface Product { ... } 
-
-// Función para guardar (crear/editar) un producto
-const handleSaveProduct = async (formData: FormData) => {
+  // ---------- Helpers: borrar producto en backend (y actualizar estados) ----------
+  const handleDeleteMyProduct = async (productId: number | string) => {
     try {
-        let response: Response;
+      const idNum = typeof productId === 'string' ? parseInt(productId, 10) : productId;
+      // Llamada al backend (DELETE) — requiere autenticación por cookies/session
+      const res = await fetch(`${API_URL}/products/delete/${idNum}/`, {
+        method: "DELETE",
+        credentials: "include",
+      });
 
-        if (editingProduct) {
-            response = await fetch(
-                `http://localhost:8000/api/products/edit/${editingProduct.id}/`,
-                {
-                    method: "POST", // Usar PATCH para actualizar
-                    body: formData,
-                    credentials: "include", 
-                }
-            );
-        } else {
-            // Creación de producto
-            response = await fetch("http://localhost:8000/api/products/create/", {
-                method: "POST",
-                body: formData, // Enviar FormData directamente
-                credentials: "include", 
-            });
-        }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || "Error deleting product");
+        return;
+      }
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            // Mostrar error específico del backend
-            throw new Error(errorData.detail || "Failed to save product"); 
-        }
-
-        const savedProduct = await response.json();
-
-        // Mapeo de campos de Django a interfaz de Frontend (Product)
-        const formattedProduct: Product = {
-            id: savedProduct.id.toString(),
-            name: savedProduct.nombre,
-            description: savedProduct.descripcion,
-            category: savedProduct.tipo,
-            price: parseFloat(savedProduct.precio),
-            stock: savedProduct.stock,
-            condition: (savedProduct.condicion || "new").toLowerCase().startsWith("us") ? "used" : "new",
-            image: savedProduct.imagen || "",
-            ownerId: savedProduct.owner_id, 
-            metodo_venta: savedProduct.metodo_venta, 
-            auction: savedProduct.auction || null, 
-        };
-
-        if (editingProduct) {
-            setProducts((prev) => prev.map((p) => (p.id === editingProduct.id ? formattedProduct : p)));
-            toast.success("Product updated successfully");
-        } else {
-            setProducts((prev) => [...prev, formattedProduct]);
-            toast.success("Product added successfully");
-        }
-
-        setIsProductFormOpen(false);
-        setEditingProduct(null);
+      // Actualizar estados locales si backend respondió OK
+      setMyProducts(prev => prev.filter(p => p.id !== idNum.toString()));
+      setProducts(prev => prev.filter(p => p.id !== idNum.toString()));
+      toast.success("Producto eliminado correctamente");
     } catch (error) {
-        console.error("Error en handleSaveProduct:", error);
-        toast.error((error as Error).message || "Error saving product"); 
-        throw error;
+      console.error("Error deleting product:", error);
+      toast.error("Error deleting product");
     }
-};
+  };
 
-// handleAddProduct y handleEditProduct no necesitan cambios
-const handleAddProduct = () => {
+
+  const handleCreateAuction = async (
+    productId: number | string,
+    initialPrice: number,
+    durationHours: number
+  ) => {
+    try {
+      const idNum = typeof productId === "string" ? parseInt(productId, 10) : productId;
+
+      // POST al backend
+      const res = await fetch(`${API_URL}/auction/create/${idNum}/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          oferta_inicial: initialPrice,
+          duracion_horas: durationHours,
+        }),
+        credentials: "include",
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        toast.error(data.error || "Error creating auction");
+        throw new Error(data.error || "Error creating auction");
+      }
+
+      // Convertir end_time ISO a Date de JS
+      const endTime = new Date(data.end_time); // backend envía ISO
+      const displayEndTime = endTime.toLocaleString(); // ajusta a hora local del usuario
+
+      toast.success(`Subasta creada correctamente. Termina: ${displayEndTime}`);
+
+      // refrescar listados
+      await fetchProducts();
+      if (user?.username) await fetchMyProducts(user.username);
+    } catch (error) {
+      console.error("Error creating auction:", error);
+      throw error;
+    }
+  };
+
+
+  // ---------- Colocar puja (usa auctionId y campo "amount" que tu view espera) ----------
+  const handlePlaceBid = async (auctionId: number, amount: number) => {
+    try {
+      const res = await fetch(`${API_URL}/auction/${auctionId}/bid/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount }),   // importante: "amount" coincide con tu view
+        credentials: "include",
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || "Error placing bid");
+        throw new Error(data.error || "Error placing bid");
+      }
+
+      toast.success("Oferta realizada");
+      // refrescar productos para que el UI muestre la oferta actualizada
+      await fetchProducts();
+      if (user?.username) await fetchMyProducts(user.username);
+      return data;
+    } catch (error) {
+      console.error("Error placing bid:", error);
+      throw error;
+    }
+  };
+
+
+
+
+
+
+  // Función para guardar (crear/editar) un producto
+  const handleSaveProduct = async (formData: FormData) => {
+    try {
+      let response: Response;
+
+      if (editingProduct) {
+        response = await fetch(
+          `http://localhost:8000/api/products/edit/${editingProduct.id}/`,
+          {
+            method: "POST", // Usar PATCH para actualizar
+            body: formData,
+            credentials: "include",
+          }
+        );
+      } else {
+        // Creación de producto
+        response = await fetch("http://localhost:8000/api/products/create/", {
+          method: "POST",
+          body: formData, // Enviar FormData directamente
+          credentials: "include",
+        });
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        // Mostrar error específico del backend
+        throw new Error(errorData.detail || "Failed to save product");
+      }
+
+      const savedProduct = await response.json();
+
+      // Mapeo de campos de Django a interfaz de Frontend (Product)
+      const formattedProduct: Product = {
+        id: savedProduct.id.toString(),
+        name: savedProduct.nombre,
+        description: savedProduct.descripcion,
+        category: savedProduct.tipo,
+        price: parseFloat(savedProduct.precio),
+        stock: savedProduct.stock,
+        condition: (savedProduct.condicion || "new").toLowerCase().startsWith("us") ? "used" : "new",
+        image: savedProduct.imagen || "",
+        ownerId: savedProduct.owner_id,
+        metodo_venta: savedProduct.metodo_venta,
+        auction: savedProduct.auction || null,
+      };
+
+      if (editingProduct) {
+        setProducts((prev) => prev.map((p) => (p.id === editingProduct.id ? formattedProduct : p)));
+        toast.success("Product updated successfully");
+      } else {
+        setProducts((prev) => [...prev, formattedProduct]);
+        toast.success("Product added successfully");
+      }
+
+      setIsProductFormOpen(false);
+      setEditingProduct(null);
+    } catch (error) {
+      console.error("Error en handleSaveProduct:", error);
+      toast.error((error as Error).message || "Error saving product");
+      throw error;
+    }
+  };
+
+  // handleAddProduct y handleEditProduct no necesitan cambios
+  const handleAddProduct = () => {
     setEditingProduct(null);
     setIsProductFormOpen(true);
-};
+  };
 
-const handleEditProduct = (product: Product) => {
+  const handleEditProduct = (product: Product) => {
     setEditingProduct(product);
     setIsProductFormOpen(true);
-};
+  };
 
   // --------- User orders ----------
   const fetchUserOrders = async (username?: string) => {
@@ -428,35 +540,33 @@ const handleEditProduct = (product: Product) => {
 
       <main className="max-w-7xl mx-auto px-6 py-8">
         {currentView === "user" && (
-        <UserShop
+          <UserShop
             {...({
               products,
               cart,
               onAddToCart: handleAddToCart,
-              onBid: handleBid,
-              onCreateAuction: handleCreateAuction,
+              onPlaceBidApi: handlePlaceBid,
+              onCreateAuctionApi: handleCreateAuction,
               userOrders: user ? userOrders : undefined,
               isAuthenticated: !!user,
               userId: user?.username ?? null,
             } as any)} // <-- as any para evitar el error de tipado puntual
-        />
+          />
 
         )}
 
 
 
         {currentView === "myProducts" && user && (
-          <MyProductsView 
-          products={myProducts} 
-          onRefresh={() => fetchMyProducts(user.username)} 
-          onCreateProduct={handleOpenCreateProduct}
-          onGoHome={() => setCurrentView("user")}
-          onEdit={handleEditProduct}
-          onDelete={(productId) => handleDeleteMyProduct(productId)}
-          onCreateAuction={(product) => {
-            setSelectedProduct(product);                  
-            setIsCreateAuctionModalOpen(true);
-          }}
+          <MyProductsView
+            products={myProducts}
+            onRefresh={() => fetchMyProducts(user.username)}
+            onCreateProduct={handleOpenCreateProduct}
+            onGoHome={() => setCurrentView("user")}
+            onEdit={handleEditProduct}
+            onDelete={handleDeleteMyProduct}
+            onCreateAuction={handleOpenCreateAuctionModal}
+          //onBid={handleOpenBidModal}
           />
         )}
       </main>
@@ -470,77 +580,99 @@ const handleEditProduct = (product: Product) => {
         onClose={() => setIsCartOpen(false)}
       />
 
-      <ProductForm 
-        product={editingProduct} 
-        isOpen={isProductFormOpen} 
-        onClose={() => setIsProductFormOpen(false)} 
-        onSave={handleSaveProduct} 
+      <ProductForm
+        product={editingProduct}
+        isOpen={isProductFormOpen}
+        onClose={() => setIsProductFormOpen(false)}
+        onSave={handleSaveProduct}
       />
 
-      <AuthModal 
-        isOpen={isAuthModalOpen} 
-        onClose={() => setIsAuthModalOpen(false)} 
-        onLogin={handleLogin} 
-        onRegister={handleRegister} 
-        initialView={authView} 
-      />  
-            {/* ---- MODALES DE SUBASTA / PUJAS ---- */}
-      {isBidModalOpen && selectedProduct && (
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onLogin={handleLogin}
+        onRegister={handleRegister}
+        initialView={authView}
+      />
+      {/* ---- MODALES DE SUBASTA / PUJAS ---- */}
+      {/* ---- MODALES DE SUBASTA / PUJAS ---- */}
+      {/* ---- MODALES DE SUBASTA / PUJAS ---- */}
+      {isBidModalOpen && selectedProduct && selectedProduct.auction && (
         <BidModal
           isOpen={isBidModalOpen}
-          product={selectedProduct} // TS sabe que no es null aquí
+          product={selectedProduct}
           onClose={() => setIsBidModalOpen(false)}
           onPlaceBid={async (amount: number) => {
-            try {
-              const response = await fetch(
-                `http://localhost:8000/api/auction/${selectedProduct.auction?.id}/bid/`,
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    usuario: user?.username,
-                    oferta: amount,
-                  }),
-                  credentials: "include",
-                }
-              );
-              if (!response.ok) throw new Error("Failed to place bid");
-              toast.success("Bid placed successfully!");
-            } catch (error) {
-              toast.error("Error placing bid");
-              throw error;
+            if (!selectedProduct.auction) {
+              toast.error("Auction not available for this product");
+              return;
             }
-          }}
-          onBidSuccess={async () => {
-            await fetchProducts();
-            if (user?.username) await fetchMyProducts(user.username);
+            try {
+              // Usar siempre auction.id
+              const auctionId = selectedProduct.auction.id;
+
+              const res = await fetch(`${API_URL}/auction/${auctionId}/bid/`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ amount }), // backend espera "amount"
+                credentials: "include",
+              });
+
+              const data = await res.json().catch(() => ({}));
+
+              if (!res.ok) {
+                toast.error(data.error || "Error placing bid");
+                return;
+              }
+
+              toast.success("Bid placed successfully!");
+
+              // Refrescar productos y subastas
+              await fetchProducts();
+              if (user?.username) await fetchMyProducts(user.username);
+            } catch (error) {
+              console.error("Error placing bid:", error);
+              toast.error("Error placing bid");
+            }
           }}
         />
       )}
+
       {isCreateAuctionModalOpen && selectedProduct && (
         <CreateAuctionModal
           isOpen={isCreateAuctionModalOpen}
           product={selectedProduct}
           onClose={() => setIsCreateAuctionModalOpen(false)}
           onCreateAuction={async (initialPrice: number, durationHours: number) => {
+            if (!selectedProduct) return;
+
             try {
-              const response = await fetch(
-                `http://localhost:8000/api/auction/create/${selectedProduct.id}/`,
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    oferta_inicial: initialPrice,
-                    duracion_horas: durationHours,
-                  }),
-                  credentials: "include",
-                }
-              );
-              if (!response.ok) throw new Error("Failed to create auction");
+              const productId = selectedProduct.id; // ID del producto, no de la subasta
+              const res = await fetch(`${API_URL}/auction/create/${productId}/`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  oferta_inicial: initialPrice,
+                  duracion_horas: durationHours,
+                }),
+                credentials: "include",
+              });
+
+              const data = await res.json().catch(() => ({}));
+
+              if (!res.ok) {
+                toast.error(data.error || "Error creating auction");
+                return;
+              }
+
               toast.success("Auction created successfully!");
+
+              // Refrescar productos y subastas
+              await fetchProducts();
+              if (user?.username) await fetchMyProducts(user.username);
             } catch (error) {
+              console.error("Error creating auction:", error);
               toast.error("Error creating auction");
-              throw error;
             }
           }}
           onCreated={async () => {
@@ -550,11 +682,13 @@ const handleEditProduct = (product: Product) => {
         />
       )}
 
-      
+
+
+
       <Toaster />
-     
+
     </div>
 
-    
+
   );
 }

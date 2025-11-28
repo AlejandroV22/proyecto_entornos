@@ -10,7 +10,7 @@ from decimal import Decimal
 from django.utils import timezone
 from datetime import datetime, timedelta
 from django.db.models import Max
-
+import pytz
 
 
 
@@ -100,7 +100,7 @@ def get_products(request):
                     auction = p.subasta
                     product_data["subasta_info"] = {
                         "auction_id": auction.id,
-                        "end_time": auction.end_time.strftime("%Y-%m-%d %H:%M:%S"),
+                        "end_time": auction.end_time.astimezone(pytz.timezone("America/Bogota")).strftime("%Y-%m-%d %H:%M:%S"),
                         "precio_minimo": str(auction.precio_minimo),
                         "oferta_actual": str(auction.highest_bid.amount) if auction.highest_bid else str(auction.precio_minimo),
                         "is_active": auction.is_active,
@@ -191,6 +191,7 @@ def edit_product(request, product_id):
 
 @csrf_exempt
 def delete_product(request, product_id):
+    print(request.user, request.user.is_authenticated)
     try:
         producto = Producto.objects.get(pk=product_id)
     except Producto.DoesNotExist:
@@ -201,7 +202,9 @@ def delete_product(request, product_id):
             return JsonResponse({"error": "Acceso denegado. Solo el dueño puede eliminar."}, status=403)
 
         if producto.metodo_venta == 'SUBASTA' and hasattr(producto, 'subasta') and producto.subasta.is_active:
-             return JsonResponse({"error": "No se puede eliminar un producto en subasta activa."}, status=400)
+             # Si la subasta sigue activa Y no ha terminado el tiempo, no se puede borrar
+             if timezone.now() < producto.subasta.end_time:
+                  return JsonResponse({"error": "No se puede eliminar un producto en subasta activa."}, status=400)
 
         producto.delete()
         return JsonResponse({"message": "Producto eliminado exitosamente"}, status=204)
@@ -210,6 +213,7 @@ def delete_product(request, product_id):
 
 @csrf_exempt
 def create_auction(request, product_id):
+    print(request.user, request.user.is_authenticated)
     if request.method == "POST":
         if not request.user.is_authenticated:
             return JsonResponse({"error": "Autenticación requerida."}, status=401)
@@ -228,11 +232,13 @@ def create_auction(request, product_id):
         data = json.loads(request.body)
         precio_minimo = Decimal(data.get("precio_minimo", 0))
         duracion_horas = data.get("duracion_horas", 24)
-
+        #duracion_horas = int(request.POST.get("duracion_horas", 24))
+        local_tz = pytz.timezone("America/Bogota")
         end_time = timezone.now() + timedelta(hours=int(duracion_horas))
         
         auction = Auction.objects.create(
             producto=producto,
+            #start_time=start_time,
             precio_minimo=precio_minimo,
             end_time=end_time
         )
@@ -245,7 +251,7 @@ def create_auction(request, product_id):
             "message": "Subasta creada exitosamente",
             "auction_id": auction.id,
             "producto": producto.nombre,
-            "end_time": end_time.strftime("%Y-%m-%d %H:%M:%S")
+            "end_time": end_time.isoformat() 
         }, status=201)
 
     return JsonResponse({"error": "Invalid request"}, status=400)
@@ -255,67 +261,105 @@ def make_bid(request, auction_id):
     if request.method == "POST":
         if not request.user.is_authenticated:
             return JsonResponse({"error": "Autenticación requerida."}, status=401)
-        
+
         try:
             auction = Auction.objects.get(pk=auction_id, is_active=True)
         except Auction.DoesNotExist:
             return JsonResponse({"error": "Subasta no encontrada o inactiva."}, status=404)
 
         if auction.is_finished:
-             return JsonResponse({"error": "La subasta ha finalizado."}, status=400)
-             
+            return JsonResponse({"error": "La subasta ha finalizado."}, status=400)
+
         if request.user == auction.producto.owner:
             return JsonResponse({"error": "No puedes ofertar en tu propia subasta."}, status=403)
-        
+
         data = json.loads(request.body)
         try:
             new_amount = Decimal(data.get("amount"))
         except:
             return JsonResponse({"error": "Monto de oferta inválido."}, status=400)
 
-        highest_bid = auction.highest_bid
+        highest = auction.highest_bid  # property
         min_bid = auction.precio_minimo
-        
-        if highest_bid:
-            min_bid = highest_bid.amount
+
+        if highest:
+            min_bid = highest.amount
             if new_amount <= min_bid:
                 return JsonResponse({"error": f"La oferta debe ser superior a la oferta actual de ${min_bid}."}, status=400)
         elif new_amount < min_bid:
             return JsonResponse({"error": f"La primera oferta debe ser de al menos ${min_bid}."}, status=400)
-            
+
+        # Crear oferta
         bid = Bid.objects.create(
             auction=auction,
             bidder=request.user,
             amount=new_amount
         )
-        
+
+        # actualiza ganador
+        auction.ganador = request.user
+        auction.save()
+
+        # Respuesta
         return JsonResponse({
             "message": "Oferta realizada exitosamente",
             "bid_id": bid.id,
-            "monto": str(bid.amount),
-            "ofertador": bid.bidder.username
+            "amount": str(bid.amount),
+            "bidder": bid.bidder.username,
+            "current_price": str(auction.highest_bid.amount)
         }, status=201)
 
     return JsonResponse({"error": "Invalid request"}, status=400)
 
+
+@csrf_exempt
+def cancel_auction(request, auction_id):
+    if request.method != "POST":
+        return JsonResponse({"error": "Method not allowed"}, status=405)
+    
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Authentication required"}, status=401)
+        
+    try:
+        auction = Auction.objects.get(pk=auction_id)
+    except Auction.DoesNotExist:
+        return JsonResponse({"error": "Auction not found"}, status=404)
+        
+    if request.user != auction.producto.owner:
+        return JsonResponse({"error": "Only the owner can cancel the auction"}, status=403)
+        
+    if not auction.is_active:
+        return JsonResponse({"error": "Auction is not active"}, status=400)
+        
+    # Cancelar subasta
+    auction.is_active = False
+    auction.save()
+    
+    # Restaurar producto a venta directa
+    product = auction.producto
+    product.metodo_venta = 'DIRECTA'
+    product.save()
+    
+    return JsonResponse({"message": "Auction cancelled successfully"})
+
+
 def serialize_auction(auction, request):
-    """Función auxiliar para formatear la respuesta JSON de una subasta."""
     highest_bid = auction.highest_bid
-    ganador_username = auction.ganador.username if auction.ganador else None
-    oferta_actual_amount = str(highest_bid.amount) if highest_bid else str(auction.precio_minimo)
-    ofertador_principal_username = highest_bid.bidder.username if highest_bid else None
-    producto_imagen_url = request.build_absolute_uri(auction.producto.imagen.url) if auction.producto.imagen else None
+
+    current_price = highest_bid.amount if highest_bid else auction.precio_minimo
+    bidder_username = highest_bid.bidder.username if highest_bid else None
 
     return {
         "auction_id": auction.id,
         "precio_minimo": str(auction.precio_minimo),
-        "end_time": auction.end_time.strftime("%Y-%m-%d %H:%M:%S"),
+        "current_price": str(current_price),
+        "highest_bidder": bidder_username,
+        "end_time": auction.end_time.astimezone(pytz.timezone("America/Bogota")).strftime("%Y-%m-%d %H:%M:%S"),
         "is_active": auction.is_active,
         "is_finished": auction.is_finished,
-        "ganador": ganador_username,
-        "oferta_actual": oferta_actual_amount,
-        "ofertador_principal": ofertador_principal_username,
+        "ganador": auction.ganador.username if auction.ganador else None,
     }
+
 
 @csrf_exempt
 def get_auction_detail(request, auction_id):
@@ -506,7 +550,7 @@ def get_user_products(request, username):
             subasta_data = {
                 "auction_id": subasta.id,
                 "precio_minimo": str(subasta.precio_minimo),
-                "end_time": subasta.end_time.strftime("%Y-%m-%d %H:%M:%S"),
+                "end_time": subasta.end_time.astimezone(pytz.timezone("America/Bogota")).strftime("%Y-%m-%d %H:%M:%S"),
                 "is_active": subasta.is_active,
                 "is_finished": subasta.is_finished,
                 "oferta_actual": str(subasta.highest_bid.amount) if subasta.highest_bid else None,

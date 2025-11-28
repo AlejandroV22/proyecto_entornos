@@ -29,5 +29,6 @@ urlpatterns = [
     # SUBASTAS
     path("auction/create/<int:product_id>/", views.create_auction),
     path("auction/<int:auction_id>/bid/", views.make_bid),
+    path("auction/<int:auction_id>/cancel/", views.cancel_auction),
     path("auction/<int:auction_id>/", views.get_auction_detail),
 ]

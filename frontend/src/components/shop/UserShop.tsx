@@ -1,38 +1,54 @@
-import React, { useState } from "react"; // 🛑 IMPORTAR useState AQUI
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Badge } from "../ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
-import { Search, Filter, Grid, List } from "lucide-react";
-import { ProductCard, Product } from "./ProductCard"; 
+import { Search, Grid, List } from "lucide-react";
+import { ProductCard, Product } from "./ProductCard";
 import { CartItem } from "./ShoppingCart";
 import { useNavigate } from "react-router-dom";
 
-// 🌟 Importar los nuevos componentes Modales 🌟
-import { BidModal } from "../modals/BidModal"; 
+// Modales
+import { BidModal } from "../modals/BidModal";
 import { CreateAuctionModal } from "../modals/CreateAuctionModal";
 
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   LineChart,
   Line
 } from "recharts";
 
+/**
+ * NOTA: agregamos props que el componente necesita del padre (App.tsx).
+ * App.tsx debe pasar estas funciones/valores como props cuando renderice <UserShop ... />
+ */
 interface UserShopProps {
   products: Product[];
   cart: CartItem[];
   onAddToCart: (product: Product) => void;
-  userId?: string | null;
-  onBid?: (product: Product) => void;
-  onCreateAuction?: (product: Product) => void;
+
+  // Handlers que deben venir desde App.tsx
+  onBid?: (product: Product) => void; // abrir modal de puja (en App)
+  onCreateAuctionRequest?: (product: Product) => void; // abrir modal crear subasta (en App)
+
+  // Funciones API que hacen la petición a backend (también definidas en App)
+  onPlaceBidApi?: (auctionId: number, amount: number) => Promise<any>;
+  onCreateAuctionApi?: (productId: number | string, initialPrice: number, durationHours: number) => Promise<any>;
+
+  // Funciones para refrescar datos (en App)
+  refreshProducts?: () => Promise<void>;
+  refreshMyProducts?: (username: string) => Promise<void>;
+
+  user?: { username?: string } | null;
+
   userOrders?: Array<{
     id: string;
     date: string;
@@ -41,133 +57,130 @@ interface UserShopProps {
     items: Array<{ productName: string; quantity: number; price: number }>;
   }>;
 
+  userId?: string | null;
   isAuthenticated?: boolean;
 }
 
-
-
-export function UserShop({ products, cart, onAddToCart, userOrders, isAuthenticated, /*onBid, onCreateAuction,*/ userId }: UserShopProps) {
+export function UserShop({
+  products,
+  cart,
+  onAddToCart,
+  onBid,
+  onCreateAuctionRequest,
+  onPlaceBidApi,
+  onCreateAuctionApi,
+  refreshProducts,
+  refreshMyProducts,
+  user,
+  userOrders,
+  userId,
+  isAuthenticated,
+}: UserShopProps) {
   const navigate = useNavigate();
-  //  ESTADOS DE TIENDA Y FILTROS
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [selectedCondition, setSelectedCondition] = useState("all");
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  
-  // ESTADOS AÑADIDOS PARA EL CONTROL DE MODALES (CORRECCIÓN 1, 2, 3) 
-  const [isBidModalOpen, setIsBidModalOpen] = useState(false);
-  const [isCreateAuctionModalOpen, setIsCreateAuctionModalOpen] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  
-  
-  // Get unique values for filters
-  const categories = [...new Set(products.map(p => p.category))];
-  const conditions = [...new Set(products.map(p => p.condition))];
 
-  // Maneja la acción de Ofertar (onBid)
-  const handleOpenBidModal = (product: Product) => {
-      // Si el producto es una subasta activa, abrimos el modal
-      if (product.metodo_venta === 'SUBASTA' && product.auction && product.auction.is_active) {
-          setSelectedProduct(product); 
-          setIsBidModalOpen(true); 
-      } else {
-          // Opción: Redirigir si queremos que la oferta se haga en otra página. 
-          // Por ahora, si es subasta, navegamos al detalle si no usamos modal.
-          if (product.metodo_venta === 'SUBASTA' && product.auction) {
-              navigate(`/auction/${product.auction.id}`);
-          } else {
-              // Opcionalmente: usar un modal de error aquí
-              console.error("Este producto no está en subasta activa.");
-          }
-      }
-    };
+  // filtros y vistas
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedCondition, setSelectedCondition] = useState("all");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
-  const handleOpenCreateAuctionModal = (product: Product) => {
-      // Aseguramos que el dueño del producto sea el usuario actual
-      if (product.ownerId && userId && product.ownerId === parseInt(userId, 10)) {
-          setSelectedProduct(product); 
-          setIsCreateAuctionModalOpen(true); 
-      } else {
-          alert("Solo el dueño puede crear una subasta para este producto.");
-      }
-  };
-  const handlePlaceBidApiCall = async (amount: number) => { // Eliminé productId ya que lo tenemos en selectedProduct
-    if (!selectedProduct) return;
-    try {
-        console.log(`Oferta de $${amount} enviada para el producto ${selectedProduct.id}.`);
-        // Aquí iría la llamada: const result = await makeBid(selectedProduct.id, amount); 
-        alert("Oferta realizada con éxito!");
-        setIsBidModalOpen(false); 
-    } catch (error) {
-        console.error("Error al ofertar:", error);
-        alert(`Fallo al ofertar: ${error}`);
-    }
-};
+  // local state para controlar modales (apertura / producto seleccionado)
+  const [isBidModalOpen, setIsBidModalOpen] = useState(false);
+  const [isCreateAuctionModalOpen, setIsCreateAuctionModalOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
-const handleCreateAuctionApiCall = async (initialPrice: number, durationDays: number) => { // Simplificado
-    if (!selectedProduct) return;
-    try {
-        console.log(`Creando subasta para ${selectedProduct.id} con precio $${initialPrice}`);
-        // Aquí iría la llamada: const result = await createAuction(selectedProduct.id, initialPrice, durationDays); 
-        alert("Subasta creada con éxito!");
-        setIsCreateAuctionModalOpen(false); 
-    } catch (error) {
-        console.error("Error al crear subasta:", error);
-        alert(`Fallo al crear subasta: ${error}`);
-    }
-};
+  // Unique filter values
+  const categories = [...new Set(products.map((p) => p.category))];
+  const conditions = [...new Set(products.map((p) => p.condition))];
 
-
-  // Filter products
-  const filteredProducts = products.filter(product => {
+  // Filtrado de productos
+  const filteredProducts = products.filter((product) => {
     const term = searchTerm.toLowerCase();
-    const matchesSearch = product.name.toLowerCase().includes(term)
+    const matchesSearch = product.name.toLowerCase().includes(term);
     const matchesCategory = selectedCategory === "all" || product.category === selectedCategory;
     const matchesCondition = selectedCondition === "all" || product.condition === selectedCondition;
-    
     return matchesSearch && matchesCategory && matchesCondition;
   });
 
-  // User analytics data
-  const monthlySpending = userOrders?.reduce((acc, order) => {
-    const month = new Date(order.date).toLocaleDateString('en-US', { month: 'short' });
-    if (acc[month]) {
-      acc[month] += order.total;
-    } else {
-      acc[month] = order.total;
+  // ---------- ACTIONS: open modals (delegan acciones al padre) ----------
+  // Abrir modal de puja localmente y delegar la acción real de "place bid" al padre
+  const openBidModal = (product: Product) => {
+    // si no hay subasta, redirigir al detalle
+    if (!product.auction) {
+      console.error("Producto no tiene subasta");
+      return;
     }
-    return acc;
-  }, {} as Record<string, number>) || {};
+    setSelectedProduct(product);
+    setIsBidModalOpen(true);
 
-  const spendingData = Object.entries(monthlySpending).map(([month, amount]) => ({
-    month,
-    amount
-  }));
+    // opcional: avisar al padre (App) que se abrió
+    if (onBid) onBid(product);
+  };
 
- 
+  // Abrir modal crear subasta (propio del dueño)
+  const openCreateAuctionModal = (product: Product) => {
+    setSelectedProduct(product);
+    setIsCreateAuctionModalOpen(true);
+    if (onCreateAuctionRequest) onCreateAuctionRequest(product);
+  };
 
-
-
-  const categorySpending = userOrders?.flatMap(order => order.items).reduce((acc, item) => {
-    // This is simplified - in a real app you'd match items to products to get categories
-    const category = "Games"; // Placeholder
-    if (acc[category]) {
-      acc[category] += item.price * item.quantity;
-    } else {
-      acc[category] = item.price * item.quantity;
+  // Handler que llama al API (delegado al padre). Mantener en este componente sólo la UI.
+  const handlePlaceBidFromModal = async (amount: number) => {
+    if (!selectedProduct || !selectedProduct.auction) {
+      throw new Error("No auction selected");
     }
-    return acc;
-  }, {} as Record<string, number>) || {};
+    const auctionId = selectedProduct.auction.id;
+    if (!onPlaceBidApi) throw new Error("onPlaceBidApi not provided in props");
 
-  const categoryData = Object.entries(categorySpending).map(([category, amount]) => ({
-    category,
-    amount
-  }));
+    const result = await onPlaceBidApi(auctionId, amount);
+    // refrescar listados si padre no lo hace
+    if (refreshProducts) await refreshProducts();
+    if (user?.username && refreshMyProducts) await refreshMyProducts(user.username);
+    return result;
+  };
 
+  const handleCreateAuctionFromModal = async (initialPrice: number, durationHours: number) => {
+    if (!selectedProduct) throw new Error("No product selected");
+    if (!onCreateAuctionApi) throw new Error("onCreateAuctionApi not provided in props");
+
+    const result = await onCreateAuctionApi(selectedProduct.id, initialPrice, durationHours);
+    if (refreshProducts) await refreshProducts();
+    if (user?.username && refreshMyProducts) await refreshMyProducts(user.username);
+    return result;
+  };
+
+  // ----- Analytics helpers (unchanged) -----
+  const monthlySpending =
+    userOrders?.reduce((acc, order) => {
+      const month = new Date(order.date).toLocaleDateString("en-US", { month: "short" });
+      if (acc[month]) acc[month] += order.total;
+      else acc[month] = order.total;
+      return acc;
+    }, {} as Record<string, number>) || {};
+
+  const spendingData = Object.entries(monthlySpending).map(([month, amount]) => ({ month, amount }));
+
+  const categorySpending =
+    userOrders
+      ?.flatMap((order) => order.items)
+      .reduce((acc, item) => {
+        const category = "Games";
+        if (acc[category]) acc[category] += item.price * item.quantity;
+        else acc[category] = item.price * item.quantity;
+        return acc;
+      }, {} as Record<string, number>) || {};
+
+  const categoryData = Object.entries(categorySpending).map(([category, amount]) => ({ category, amount }));
   const totalSpent = userOrders?.reduce((sum, order) => sum + order.total, 0) || 0;
   const totalOrders = userOrders?.length || 0;
-  // UserShop.tsx (Dentro del componente UserShop, antes del return)
 
+  // ensure modals close when selectedProduct removed
+  useEffect(() => {
+    if (!selectedProduct) {
+      setIsBidModalOpen(false);
+      setIsCreateAuctionModalOpen(false);
+    }
+  }, [selectedProduct]);
 
   return (
     <div className="space-y-6">
@@ -183,20 +196,15 @@ const handleCreateAuctionApiCall = async (initialPrice: number, durationDays: nu
         </TabsList>
 
         <TabsContent value="shop" className="space-y-4">
-          {/* Search and Filters */}
+          {/* Search / Filters */}
           <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex-1">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground size-4" />
-                <Input
-                  placeholder="Search products..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
+                <Input placeholder="Search products..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
               </div>
             </div>
-            
+
             <div className="flex gap-2">
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                 <SelectTrigger className="w-[140px]">
@@ -204,8 +212,10 @@ const handleCreateAuctionApiCall = async (initialPrice: number, durationDays: nu
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
-                  {categories.map(category => (
-                    <SelectItem key={category} value={category}>{category}</SelectItem>
+                  {categories.map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -216,48 +226,44 @@ const handleCreateAuctionApiCall = async (initialPrice: number, durationDays: nu
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Conditions</SelectItem>
-                  {conditions.map(condition => (
-                    <SelectItem key={condition} value={condition}>{condition}</SelectItem>
+                  {conditions.map((condition) => (
+                    <SelectItem key={condition} value={condition}>
+                      {condition}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
 
               <div className="flex border rounded-md">
-                <Button
-                  variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setViewMode('grid')}
-                  className="rounded-r-none"
-                >
+                <Button variant={viewMode === "grid" ? "default" : "ghost"} size="sm" onClick={() => setViewMode("grid")} className="rounded-r-none">
                   <Grid className="size-4" />
                 </Button>
-                <Button
-                  variant={viewMode === 'list' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setViewMode('list')}
-                  className="rounded-l-none"
-                >
+                <Button variant={viewMode === "list" ? "default" : "ghost"} size="sm" onClick={() => setViewMode("list")} className="rounded-l-none">
                   <List className="size-4" />
                 </Button>
               </div>
             </div>
           </div>
 
-          {/* Products Grid/List */}
-          <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" : "space-y-4"}>
-              {filteredProducts.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  isAuthenticated={!!isAuthenticated}
-                  onAddToCart={onAddToCart} 
-                  onBid={handleOpenBidModal} 
-                  onCreateAuction={handleOpenCreateAuctionModal}
-                  // -------------------------------------------
-                  userId={userId ? parseInt(userId, 10) : undefined}
-                />
-              ))}
-            </div>
+          {/* Products */}
+          <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" : "space-y-4"}>
+            {filteredProducts.map((product) => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                isAuthenticated={!!isAuthenticated}
+                onAddToCart={onAddToCart}
+                // cuando el ProductCard llama onBid(product) abrimos modal localmente:
+                onBid={(p) => {
+                  openBidModal(p);
+                }}
+                onCreateAuction={(p) => {
+                  openCreateAuctionModal(p);
+                }}
+                userId={userId ? parseInt(userId, 10) : undefined}
+              />
+            ))}
+          </div>
 
           {filteredProducts.length === 0 && (
             <div className="text-center py-8">
@@ -266,6 +272,7 @@ const handleCreateAuctionApiCall = async (initialPrice: number, durationDays: nu
           )}
         </TabsContent>
 
+        {/* Orders / Analytics tabs — sin cambios funcionales */}
         {isAuthenticated && (
           <>
             <TabsContent value="orders" className="space-y-4">
@@ -281,15 +288,15 @@ const handleCreateAuctionApiCall = async (initialPrice: number, durationDays: nu
                           <span className="font-semibold">${order.total.toFixed(2)}</span>
                         </div>
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        {new Date(order.date).toLocaleDateString()}
-                      </p>
+                      <p className="text-sm text-muted-foreground">{new Date(order.date).toLocaleDateString()}</p>
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-2">
                         {order.items.map((item, index) => (
                           <div key={index} className="flex justify-between items-center text-sm">
-                            <span>{item.productName} × {item.quantity}</span>
+                            <span>
+                              {item.productName} × {item.quantity}
+                            </span>
                             <span>${(item.price * item.quantity).toFixed(2)}</span>
                           </div>
                         ))}
@@ -298,10 +305,10 @@ const handleCreateAuctionApiCall = async (initialPrice: number, durationDays: nu
                   </Card>
                 ))}
               </div>
-              
             </TabsContent>
 
             <TabsContent value="analytics" className="space-y-4">
+              {/* analytics cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <Card>
                   <CardHeader className="pb-2">
@@ -309,35 +316,25 @@ const handleCreateAuctionApiCall = async (initialPrice: number, durationDays: nu
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">${totalSpent.toFixed(2)}</div>
-                    <p className="text-xs text-muted-foreground">
-                      All time spending
-                    </p>
+                    <p className="text-xs text-muted-foreground">All time spending</p>
                   </CardContent>
                 </Card>
-                
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">{totalOrders}</div>
-                    <p className="text-xs text-muted-foreground">
-                      Completed purchases
-                    </p>
+                    <p className="text-xs text-muted-foreground">Completed purchases</p>
                   </CardContent>
                 </Card>
-                
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium">Average Order</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">
-                      ${totalOrders > 0 ? (totalSpent / totalOrders).toFixed(2) : '0.00'}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Per order value
-                    </p>
+                    <div className="text-2xl font-bold">${totalOrders > 0 ? (totalSpent / totalOrders).toFixed(2) : "0.00"}</div>
+                    <p className="text-xs text-muted-foreground">Per order value</p>
                   </CardContent>
                 </Card>
               </div>
@@ -353,7 +350,7 @@ const handleCreateAuctionApiCall = async (initialPrice: number, durationDays: nu
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="month" />
                         <YAxis />
-                        <Tooltip formatter={(value) => [`$${value}`, 'Spent']} />
+                        <Tooltip formatter={(value) => [`$${value}`, "Spent"]} />
                         <Line type="monotone" dataKey="amount" stroke="#8884d8" />
                       </LineChart>
                     </ResponsiveContainer>
@@ -370,8 +367,8 @@ const handleCreateAuctionApiCall = async (initialPrice: number, durationDays: nu
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="category" />
                         <YAxis />
-                        <Tooltip formatter={(value) => [`$${value}`, 'Spent']} />
-                        <Bar dataKey="amount" fill="#8884d8" />
+                        <Tooltip formatter={(value) => [`$${value}`, "Spent"]} />
+                        <Bar dataKey="amount" />
                       </BarChart>
                     </ResponsiveContainer>
                   </CardContent>
@@ -381,32 +378,37 @@ const handleCreateAuctionApiCall = async (initialPrice: number, durationDays: nu
           </>
         )}
       </Tabs>
-        {/* 🌟 RENDERIZADO DEL MODAL DE OFERTA 🌟 */}
-        {isBidModalOpen && selectedProduct && (
-            <BidModal 
-                isOpen={isBidModalOpen}
-                onClose={() => setIsBidModalOpen(false)} // Función para cerrar
-                product={selectedProduct}
-                // Función real que llama a la API de Django (Definiremos esta lógica a continuación)
-                onPlaceBid={(amount: number) => handlePlaceBidApiCall(amount)}
-            />
-        )}
 
-        {/* 🌟 RENDERIZADO DEL MODAL DE CREACIÓN DE SUBASTA 🌟 */}
-        {isCreateAuctionModalOpen && selectedProduct && (
-            <CreateAuctionModal
-                isOpen={isCreateAuctionModalOpen}
-                onClose={() => setIsCreateAuctionModalOpen(false)}
-                product={selectedProduct}
-                // Función real que llama a la API de Django
-                onCreateAuction={handleCreateAuctionApiCall}
-            />
-        )}
+      {/* ---- Bid Modal (UI) ---- */}
+      {isBidModalOpen && selectedProduct && selectedProduct.auction && (
+        <BidModal
+          isOpen={isBidModalOpen}
+          product={selectedProduct}
+          onClose={() => {
+            setIsBidModalOpen(false);
+            setSelectedProduct(null);
+          }}
+          onPlaceBid={(amount: number) => handlePlaceBidFromModal(amount)}
+          onBidSuccess={async () => {
+            if (refreshProducts) await refreshProducts();
+            if (user?.username && refreshMyProducts) await refreshMyProducts(user.username);
+          }}
+        />
+      )}
 
-
+      {/* ---- Create Auction Modal (UI) ---- */}
+      {isCreateAuctionModalOpen && selectedProduct && (
+        <CreateAuctionModal
+          isOpen={isCreateAuctionModalOpen}
+          product={selectedProduct}
+          onClose={() => {
+            setIsCreateAuctionModalOpen(false);
+            setSelectedProduct(null);
+          }}
+          onCreateAuction={(initialPrice: number, durationHours: number) => handleCreateAuctionFromModal(initialPrice, durationHours)}
+          // onCreated: after successful creation we refresh (the handler returns a promise)
+        />
+      )}
     </div>
-
-    
   );
-
 }

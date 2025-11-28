@@ -5,6 +5,8 @@ import { ImageWithFallback } from "../imagefallback/ImageWithFallback";
 import { Plus, ShoppingCart, Gavel } from "lucide-react";
 import { useEffect, useState } from "react";
 
+
+
 export interface Product {
   id: string;
   name: string;
@@ -15,16 +17,12 @@ export interface Product {
   condition: "new" | "used" | "refurbished";
   image?: string;
 
-  auction?: {
-    id: number;
-    current_price: number;
-    end_time: string;
-    is_active: boolean;
-  } | null;
+  auction?: Auction | null;
 
   // 🌟 CAMPOS REQUERIDOS PARA LA LÓGICA DE SUBASTA 🌟
   ownerId: number; // El ID del vendedor
   metodo_venta: 'DIRECTA' | 'SUBASTA'; // Indica el método
+  
   auctionId?: number; // Opcional: El ID de la subasta asociada (si metodo_venta es 'SUBASTA')
   currentAuctionPrice?: number; // Opcional: Precio actual de la oferta
 }
@@ -38,12 +36,21 @@ interface ProductCardProps {
   onBid: (product: Product) => void;
 }
 
+export interface Auction {
+  id: number;
+  current_price: number;
+  precio_minimo?: number;     
+  end_time: string;
+  is_active: boolean;
+}
+
+
 export function ProductCard({
   product,
   onAddToCart,
   userId,
-  isAuthenticated,
   onCreateAuction,
+  isAuthenticated,
   onBid,
 }: ProductCardProps) {
   const conditionColors = {
@@ -56,7 +63,7 @@ export function ProductCard({
   const isAuctionActive = 
   product.metodo_venta === 'SUBASTA' && 
   product.auction && 
-  new Date(product.auction.end_time) > new Date(); // 👈 Verificación de fecha
+  new Date(product.auction.end_time) > new Date(); 
 
   const isBidDisabled = 
     !isAuctionActive || 
@@ -82,6 +89,7 @@ export function ProductCard({
 
       setTimeLeft(`${h}h ${m}m ${s}s`);
     }, 1000);
+
 
     return () => clearInterval(interval);
   }, [product.auction]);

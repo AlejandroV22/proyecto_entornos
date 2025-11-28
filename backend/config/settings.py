@@ -60,7 +60,10 @@ MIDDLEWARE = [
 # CORS
 # -----------------------------------------------------
 
-CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=["http://localhost:3000"])
+CORS_ALLOWED_ORIGINS = [
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+]
 CORS_ALLOW_CREDENTIALS = True
 
 # -----------------------------------------------------
@@ -155,7 +158,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # --------------------------------------------------
 
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'America/Bogota'
 USE_I18N = True
 USE_TZ = True
 

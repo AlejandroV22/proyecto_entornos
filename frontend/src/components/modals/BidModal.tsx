@@ -24,7 +24,10 @@ export function BidModal({
   const [bidAmount, setBidAmount] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const currentPrice = product.auction?.current_price || 0;
+  const currentPrice = parseFloat(
+    String(product.auction?.current_price ?? product.auction?.precio_minimo ?? "0")
+  );
+
   const minNextBid = currentPrice + 1;
 
   const handleSubmit = async () => {
